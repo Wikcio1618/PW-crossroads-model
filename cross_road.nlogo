@@ -1,48 +1,166 @@
+globals [
+  margin
+  road_width
+  pillar_radius
+  Ay_cor
+  Bx_cor
+  Cy_cor
+  Dx_cor
+  attr_coeff
+  obst_coeff
+  bump_coeff
+]
+
 turtles-own [dest]
 ;; Setup procedure
 to setup
   clear-all
+  set margin 0.0
+  set road_width 6
+  set pillar_radius 5
+  set Ay_cor max-pycor - margin * (max-pycor - min-pycor)
+  set Bx_cor max-pxcor - margin * (max-pxcor - min-pxcor)
+  set Cy_cor min-pycor + margin * (max-pycor - min-pycor)
+  set Dx_cor min-pxcor + margin * (max-pxcor - min-pxcor)
+  set attr_coeff 0.1
+  set obst_coeff 0.01
+  set bump_coeff 1
   setup-patches
   setup-turtles
   reset-ticks
 end
 
-;; Setup the crossroad and blockades
-to setup-patches
-  ;; Create the crossroad
-  ask patches [
-    if (pxcor > -90 and pxcor < 90 and pycor > -15 and pycor < 15) [
-      set pcolor gray ;; Horizontal road
+to go
+  ask turtles [
+    let dest_cors get_dest_cords dest
+    let dest_vec list (item 0 dest_cors - xcor) (item 1 dest_cors - ycor)
+    if (abs item 0 dest_vec < 0.1) and (abs item 1 dest_vec < 0.1) [
+      spawn-at-random
     ]
-    if (pycor > -90 and pycor < 90 and pxcor > -15 and pxcor < 15) [
-      set pcolor gray ;; Vertical road
+    let F_attr calc-Fattr
+    let F_obst calc-Fobst
+    let F_bump calc-Fbump
+    show F_bump
+    let F_sup (map + F_attr F_obst F_bump)
+    facexy (item 0 F_sup + xcor) (item 1 F_sup + ycor)
+    forward sqrt (item 0 F_sup ^ 2 + item 1 F_sup ^ 2)
+  ]
+  tick
+end
+
+to setup-patches
+  create-roads
+  create-pillar
+end
+
+;; Setup the crossroad and blockades
+to create-roads
+  ;; Create the crossroad
+   ask patches [
+    ;; Horizontal road (centered vertically)
+    if (pxcor >= Dx_cor and
+        pxcor <= Bx_cor and
+        pycor >= road_width / -2 and
+        pycor <= road_width / 2) [
+      set pcolor gray
+    ]
+
+    ;; Vertical road (centered horizontally)
+    if (pycor >= Cy_cor and
+        pycor <= Ay_cor and
+        pxcor >= road_width / -2 and
+        pxcor <= road_width / 2) [
+      set pcolor gray
     ]
   ]
+end
 
+to create-pillar
    ;;Create a circular pillar in the middle
   if pillar [ask patches with [
-    distancexy 0 0 <= 10 ;; Radius of 10
+    distancexy 0 0 <= pillar_radius ;; Radius of 10
   ] [
     set pcolor red ;; Circular pillar with red patches
-  ]]
+    ]
+  ]
 end
 
 ;; Setup the turtles
 to setup-turtles
-  ;; Define starting points at the edges of each road
-  let start-points [
-    [-90 0] [90 0] [0 -90] [0 90]
+  create-turtles total-turtles [
+  spawn-at-random
   ]
+end
 
-  foreach start-points [
-    coords ->
-    ;; Spawn 50 turtles for each road line
-    create-turtles 50 [
-      setxy (item 0 coords) (item 1 coords)
-      set color green
-      set dest one-of ["A" "B" "C" "D"] ;; Assign a random destination
+to spawn-at-random
+  let line random 4 ;; Randomly assign a line (0 = A, 1 = B, 2 = C, 3 = D)
+    if line = 0 [
+      ;; Line A: Vertical line at x = 0
+      setxy (random-float road_width - road_width / 2) Ay_cor ;; y-coordinate is random from -10 to 10
+      set dest one-of [ 1 2 3 ]
+    ]
+    if line = 1 [
+      ;; Line B: Horizontal line at y = 0
+      setxy Bx_cor (random-float road_width - road_width / 2) ;; x-coordinate is random from -10 to 10
+      set dest one-of [ 0 2 3 ]
+    ]
+    if line = 2 [
+      ;; Line C: Vertical line at x = 5
+      setxy (random-float road_width - road_width / 2) Cy_cor ;; y-coordinate is random from -10 to 10
+      set dest one-of [ 0 1 3 ]
+    ]
+    if line = 3 [
+      ;; Line D: Horizontal line at y = -5
+      setxy Dx_cor (random-float road_width - road_width / 2) ;; x-coordinate is random from -10 to 10
+      set dest one-of [ 0 1 2 ]
+    ]
+  color-turtle
+end
+
+to-report calc-Fobst
+  let xmin road_width / -2 + 1
+  let xmax road_width / 2 - 1
+  let ymin road_width / -2 + 1
+  let ymax road_width / 2 - 1
+  if (xcor < xmax) and (xcor > xmin) and (ycor < ymax) and (ycor > ymin) [ report list 0 0 ]
+  if ycor > 0 and ycor < ymax [ report list 0 (- obst_coeff / (road_width / 2 - ycor) ^ 2)]
+  if ycor < 0 and ycor > ymin [ report list 0 (obst_coeff / (ycor + road_width / 2) ^ 2)]
+  if xcor > 0 and xcor < xmax [ report list (- obst_coeff / (road_width / 2 - xcor) ^ 2) 0 ]
+  if xcor < 0 and xcor > xmin [ report list (obst_coeff / (xcor + road_width / 2) ^ 2) 0 ]
+  report list 0 0
+
+end
+
+to-report calc-Fattr
+  let dest_cors get_dest_cords dest
+  let dest_vec list (item 0 dest_cors - xcor) (item 1 dest_cors - ycor)
+  let norm_dest_vec normalize dest_vec
+  report list (attr_coeff * item 0 norm_dest_vec) (attr_coeff * item 1 norm_dest_vec)
+end
+
+to-report calc-Fbump
+  let nearby-turtles other turtles in-radius 5
+  let F_bump list 0 0
+
+  ask nearby-turtles [
+    let vector_to_me (list (xcor - [xcor] of myself) (ycor - [ycor] of myself))
+    let dist distance myself
+    if dist > 0 [ ;; Avoid division by zero
+      let unit-vector-to-me normalize vector_to_me
+      let force-contribution map [ i -> i * (- bump_coeff / dist ^ 2) ] unit-vector-to-me
+      set F_bump (map + force-contribution F_bump) ;; Sum up forces
     ]
   ]
+  report F_bump
+end
+
+to color-turtle
+    (ifelse
+      dest = 0 [ set color red ]
+      dest = 1 [ set color magenta ]
+      dest = 2 [ set color orange ]
+      dest = 3 [ set color blue ]
+    )
 end
 
 to annotate-board
@@ -58,32 +176,49 @@ to annotate-board
     set plabel "C"
     set plabel-color yellow
   ]
-  ask patch -90 0[
+  ask patch -90 0 [
     set plabel "D"
   ]
+end
+
+;; Helper function: Normalize a vector (convert it to a unit vector)
+to-report normalize [vector]
+  let magnitude sqrt (item 0 vector ^ 2 + item 1 vector ^ 2)
+  if magnitude = 0 [ report vector ] ;; Avoid division by zero
+  let normed map [i -> i / magnitude] vector
+  report normed
+end
+
+to-report get_dest_cords [i]
+  (ifelse
+    i = 0 [ report list 0 Ay_cor]
+    i = 1 [ report list Bx_cor 0]
+    i = 2 [ report list 0 Cy_cor]
+    i = 3 [ report list Dx_cor 0]
+  )
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
 195
 10
-605
-421
+659
+475
 -1
 -1
-2.0
+5.63
 1
 10
 1
 1
 1
 0
+0
+0
 1
-1
-1
--100
-100
--100
-100
+-40
+40
+-40
+40
 0
 0
 1
@@ -91,10 +226,10 @@ ticks
 30.0
 
 SWITCH
-17
-143
-107
-176
+51
+97
+141
+130
 pillar
 pillar
 1
@@ -116,6 +251,48 @@ NIL
 NIL
 NIL
 NIL
+1
+
+BUTTON
+108
+34
+171
+67
+Go
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+10
+180
+182
+213
+total-turtles
+total-turtles
+1
+1000
+26.0
+25
+1
+NIL
+HORIZONTAL
+
+TEXTBOX
+45
+160
+195
+178
+Total turtles
+14
+0.0
 1
 
 @#$#@#$#@
