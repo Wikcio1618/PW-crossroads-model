@@ -1,30 +1,20 @@
 globals [
   margin
-  road_width
-  pillar_radius
   Ay_cor
   Bx_cor
   Cy_cor
   Dx_cor
-  attr_coeff
-  obst_coeff
-  bump_coeff
 ]
 
-turtles-own [dest]
+turtles-own [dest vx vy newx newy]
 ;; Setup procedure
 to setup
   clear-all
-  set margin 0.0
-  set road_width 6
-  set pillar_radius 5
+  set margin 0
   set Ay_cor max-pycor - margin * (max-pycor - min-pycor)
   set Bx_cor max-pxcor - margin * (max-pxcor - min-pxcor)
   set Cy_cor min-pycor + margin * (max-pycor - min-pycor)
   set Dx_cor min-pxcor + margin * (max-pxcor - min-pxcor)
-  set attr_coeff 0.1
-  set obst_coeff 0.01
-  set bump_coeff 1
   setup-patches
   setup-turtles
   reset-ticks
@@ -32,18 +22,32 @@ end
 
 to go
   ask turtles [
-    let dest_cors get_dest_cords dest
-    let dest_vec list (item 0 dest_cors - xcor) (item 1 dest_cors - ycor)
-    if (abs item 0 dest_vec < 0.1) and (abs item 1 dest_vec < 0.1) [
-      spawn-at-random
-    ]
     let F_attr calc-Fattr
     let F_obst calc-Fobst
     let F_bump calc-Fbump
-    show F_bump
-    let F_sup (map + F_attr F_obst F_bump)
-    facexy (item 0 F_sup + xcor) (item 1 F_sup + ycor)
-    forward sqrt (item 0 F_sup ^ 2 + item 1 F_sup ^ 2)
+    let F_sup list (item 0 F_attr + item 0 F_obst + item 0 F_bump) (item 1 F_attr + item 1 F_obst + item 1 F_bump)
+
+    set vx vx + item 0 F_sup
+    set vy vy + item 1 F_sup
+;    if vx > 2 [set vx 2]
+;    if vx < -2 [set vx -2]
+;    if vy > 2 [set vy 2]
+;    if vy < -2 [set vy -2]
+
+    set newx xcor + vx
+    set newy ycor + vy
+  ]
+
+  ask turtles [
+    ifelse (newx > max-pxcor or newx < min-pxcor or newy < min-pycor or newy > max-pycor)
+    [
+      spawn-at-random
+    ] [
+      facexy newx newy
+      if (newx > (road_width / 2) or newx < (road_width / -2)) and (newy > (road_width / 2) or newy < (road_width / -2) and (abs newx > abs newy)) [set vy (- vy) ]
+      if (newy > (road_width / 2) or newy < (road_width / -2)) and (newx > (road_width / 2) or newx < (road_width / -2) and (abs newy > abs newx)) [set vx (- vx) ]
+      setxy (xcor + vx) (ycor + vy)
+    ]
   ]
   tick
 end
@@ -56,31 +60,31 @@ end
 ;; Setup the crossroad and blockades
 to create-roads
   ;; Create the crossroad
-   ask patches [
+  ask patches [
     ;; Horizontal road (centered vertically)
     if (pxcor >= Dx_cor and
-        pxcor <= Bx_cor and
-        pycor >= road_width / -2 and
-        pycor <= road_width / 2) [
+      pxcor <= Bx_cor and
+      pycor >= road_width / -2 and
+      pycor <= road_width / 2) [
       set pcolor gray
     ]
 
     ;; Vertical road (centered horizontally)
     if (pycor >= Cy_cor and
-        pycor <= Ay_cor and
-        pxcor >= road_width / -2 and
-        pxcor <= road_width / 2) [
+      pycor <= Ay_cor and
+      pxcor >= road_width / -2 and
+      pxcor <= road_width / 2) [
       set pcolor gray
     ]
   ]
 end
 
 to create-pillar
-   ;;Create a circular pillar in the middle
+  ;;Create a circular pillar in the middle
   if pillar [ask patches with [
-    distancexy 0 0 <= pillar_radius ;; Radius of 10
+    distancexy 0 0 <= pillar_radius
   ] [
-    set pcolor red ;; Circular pillar with red patches
+    set pcolor red
     ]
   ]
 end
@@ -88,102 +92,88 @@ end
 ;; Setup the turtles
 to setup-turtles
   create-turtles total-turtles [
-  spawn-at-random
+    spawn-at-random
   ]
 end
 
 to spawn-at-random
-  let line random 4 ;; Randomly assign a line (0 = A, 1 = B, 2 = C, 3 = D)
-    if line = 0 [
-      ;; Line A: Vertical line at x = 0
-      setxy (random-float road_width - road_width / 2) Ay_cor ;; y-coordinate is random from -10 to 10
-      set dest one-of [ 1 2 3 ]
-    ]
-    if line = 1 [
-      ;; Line B: Horizontal line at y = 0
-      setxy Bx_cor (random-float road_width - road_width / 2) ;; x-coordinate is random from -10 to 10
-      set dest one-of [ 0 2 3 ]
-    ]
-    if line = 2 [
-      ;; Line C: Vertical line at x = 5
-      setxy (random-float road_width - road_width / 2) Cy_cor ;; y-coordinate is random from -10 to 10
-      set dest one-of [ 0 1 3 ]
-    ]
-    if line = 3 [
-      ;; Line D: Horizontal line at y = -5
-      setxy Dx_cor (random-float road_width - road_width / 2) ;; x-coordinate is random from -10 to 10
-      set dest one-of [ 0 1 2 ]
-    ]
+  let line random 4
+  if line = 0 [
+    setxy (random-float road_width - road_width / 2) Ay_cor
+  ]
+  if line = 1 [
+    setxy Bx_cor (random-float road_width - road_width / 2)
+  ]
+  if line = 2 [
+    setxy (random-float road_width - road_width / 2) Cy_cor
+  ]
+  if line = 3 [
+    setxy Dx_cor (random-float road_width - road_width / 2)
+  ]
+  set dest (line + 2) mod 4
+  set vx 0
+  set vy 0
+  set newx 0
+  set newy 0
   color-turtle
-end
-
-to-report calc-Fobst
-  let xmin road_width / -2 + 1
-  let xmax road_width / 2 - 1
-  let ymin road_width / -2 + 1
-  let ymax road_width / 2 - 1
-  if (xcor < xmax) and (xcor > xmin) and (ycor < ymax) and (ycor > ymin) [ report list 0 0 ]
-  if ycor > 0 and ycor < ymax [ report list 0 (- obst_coeff / (road_width / 2 - ycor) ^ 2)]
-  if ycor < 0 and ycor > ymin [ report list 0 (obst_coeff / (ycor + road_width / 2) ^ 2)]
-  if xcor > 0 and xcor < xmax [ report list (- obst_coeff / (road_width / 2 - xcor) ^ 2) 0 ]
-  if xcor < 0 and xcor > xmin [ report list (obst_coeff / (xcor + road_width / 2) ^ 2) 0 ]
-  report list 0 0
-
 end
 
 to-report calc-Fattr
   let dest_cors get_dest_cords dest
-  let dest_vec list (item 0 dest_cors - xcor) (item 1 dest_cors - ycor)
-  let norm_dest_vec normalize dest_vec
-  report list (attr_coeff * item 0 norm_dest_vec) (attr_coeff * item 1 norm_dest_vec)
+
+  let dist-x (item 0 dest_cors - xcor)
+  let dist-y (item 1 dest_cors - ycor)
+
+  let dist sqrt(dist-x ^ 2 + dist-y ^ 2) + 0.0001
+  let Fx (attr_coeff / dist * dist-x)
+  let Fy (attr_coeff / dist * dist-y)
+
+  report list Fx Fy
+end
+
+to-report calc-Fobst
+  let xmin road_width / -2
+  let xmax road_width / 2
+  let ymin road_width / -2
+  let ymax road_width / 2
+  if (xcor < xmax) and (xcor > xmin) and (ycor < ymax) and (ycor > ymin) [ report list 0 0 ]
+  if ycor > 0 and ycor < ymax [ report list 0 (- obst_coeff / (0.1 + (road_width / 2) - ycor))]
+  if ycor < 0 and ycor > ymin [ report list 0 (obst_coeff / (0.1 + ycor + (road_width / 2)))]
+  if xcor > 0 and xcor < xmax [ report list (- obst_coeff / (0.1 + (road_width / 2) - xcor)) 0 ]
+  if xcor < 0 and xcor > xmin [ report list (obst_coeff / (0.1 + xcor + (road_width / 2))) 0 ]
+  report list 0 0
 end
 
 to-report calc-Fbump
-  let nearby-turtles other turtles in-radius 5
-  let F_bump list 0 0
-
-  ask nearby-turtles [
-    let vector_to_me (list (xcor - [xcor] of myself) (ycor - [ycor] of myself))
-    let dist distance myself
-    if dist > 0 [ ;; Avoid division by zero
-      let unit-vector-to-me normalize vector_to_me
-      let force-contribution map [ i -> i * (- bump_coeff / dist ^ 2) ] unit-vector-to-me
-      set F_bump (map + force-contribution F_bump) ;; Sum up forces
+  let Fx 0
+  let Fy 0
+  let nearby-turtles other turtles in-radius 10
+  if any? nearby-turtles
+    [
+      let mx xcor
+      let my ycor
+      let ax sum [1 / (((mx - xcor) / (distancexy mx my) + 0.01))] of nearby-turtles
+      let ay sum [1 / (((my - ycor) / (distancexy mx my) + 0.01))] of nearby-turtles
+      set Fx Fx - bump_coeff * ax
+      set Fy Fy - bump_coeff * ay
     ]
-  ]
-  report F_bump
+
+
+  report list Fx Fy
 end
 
 to color-turtle
-    (ifelse
-      dest = 0 [ set color red ]
-      dest = 1 [ set color magenta ]
-      dest = 2 [ set color orange ]
-      dest = 3 [ set color blue ]
-    )
-end
-
-to annotate-board
-   ask patch 0 90 [
-    set plabel "A"
-    set plabel-color yellow
-  ]
-  ask patch 90 0 [
-    set plabel "B"
-    set plabel-color yellow
-  ]
-  ask patch 0 -90 [
-    set plabel "C"
-    set plabel-color yellow
-  ]
-  ask patch -90 0 [
-    set plabel "D"
-  ]
+  (ifelse
+    dest = 0 [ set color red ]
+    dest = 1 [ set color magenta ]
+    dest = 2 [ set color orange ]
+    dest = 3 [ set color blue ]
+  )
 end
 
 ;; Helper function: Normalize a vector (convert it to a unit vector)
 to-report normalize [vector]
-  let magnitude sqrt (item 0 vector ^ 2 + item 1 vector ^ 2)
+  let magnitude sqrt ((item 0 vector) ^ 2 + (item 1 vector) ^ 2)
   if magnitude = 0 [ report vector ] ;; Avoid division by zero
   let normed map [i -> i / magnitude] vector
   report normed
@@ -226,10 +216,10 @@ ticks
 30.0
 
 SWITCH
-51
-97
-141
-130
+48
+115
+138
+148
 pillar
 pillar
 1
@@ -271,10 +261,10 @@ NIL
 1
 
 SLIDER
-10
-180
-182
-213
+11
+179
+183
+212
 total-turtles
 total-turtles
 1
@@ -285,15 +275,80 @@ total-turtles
 NIL
 HORIZONTAL
 
-TEXTBOX
-45
-160
-195
-178
-Total turtles
-14
+SLIDER
+11
+227
+183
+260
+road_width
+road_width
+4
+(max-pxcor - min-pxcor)
+8.0
+2
+1
+NIL
+HORIZONTAL
+
+SLIDER
+12
+271
+184
+304
+pillar_radius
+pillar_radius
+0
+road_width
 0.0
 1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+11
+315
+183
+348
+attr_coeff
+attr_coeff
+0
+0.001
+0.0
+0.0001
+1
+NIL
+HORIZONTAL
+
+SLIDER
+12
+359
+184
+392
+obst_coeff
+obst_coeff
+0
+0.001
+0.0
+0.0001
+1
+NIL
+HORIZONTAL
+
+SLIDER
+11
+406
+183
+439
+bump_coeff
+bump_coeff
+0
+0.0000001
+1.0E-7
+0.00000001
+1
+NIL
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
