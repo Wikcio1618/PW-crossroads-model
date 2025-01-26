@@ -29,10 +29,25 @@ to go
 
     set vx vx + item 0 F_sup
     set vy vy + item 1 F_sup
-;    if vx > 2 [set vx 2]
-;    if vx < -2 [set vx -2]
-;    if vy > 2 [set vy 2]
-;    if vy < -2 [set vy -2]
+    let v_val sqrt (vx * vx + vy * vy)
+    if v_val > 0.2 [
+      set vx vx / v_val * 0.2
+     set vy vy / v_val * 0.2
+    ]
+
+
+    set newx xcor + vx
+    set newy ycor + vy
+
+    if (abs newx >= abs newy) and (newy >= (road_width / 2) or newy <= (road_width / -2)) [set vy (- vy) ]
+      if (abs newy > abs newx) and (newx >= (road_width / 2) or newx <= (road_width / -2)) [set vx (- vx) ]
+      if pillar and (newx * newx + newy * newy <= pillar_radius * pillar_radius) [
+        ifelse abs xcor > abs ycor [
+          set vx (- vx)
+        ] [
+          set vy (- vy)
+        ]
+      ]
 
     set newx xcor + vx
     set newy ycor + vy
@@ -44,8 +59,6 @@ to go
       spawn-at-random
     ] [
       facexy newx newy
-      if (newx > (road_width / 2) or newx < (road_width / -2)) and (newy > (road_width / 2) or newy < (road_width / -2) and (abs newx > abs newy)) [set vy (- vy) ]
-      if (newy > (road_width / 2) or newy < (road_width / -2)) and (newx > (road_width / 2) or newx < (road_width / -2) and (abs newy > abs newx)) [set vx (- vx) ]
       setxy (xcor + vx) (ycor + vy)
     ]
   ]
@@ -82,9 +95,9 @@ end
 to create-pillar
   ;;Create a circular pillar in the middle
   if pillar [ask patches with [
-    distancexy 0 0 <= pillar_radius
+    distancexy 0 0 < pillar_radius
   ] [
-    set pcolor red
+    set pcolor black
     ]
   ]
 end
@@ -99,22 +112,28 @@ end
 to spawn-at-random
   let line random 4
   if line = 0 [
-    setxy (random-float road_width - road_width / 2) Ay_cor
+    setxy (random-float road_width - road_width / 2) Ay_cor - random-float 8
+    set vy (- random-float 0.05)
+    set vx random-float 0.05
   ]
   if line = 1 [
-    setxy Bx_cor (random-float road_width - road_width / 2)
+    setxy Bx_cor - random-float 8 (random-float road_width - road_width / 2)
+    set vy random-float 0.05
+    set vx (- random-float 0.05)
   ]
   if line = 2 [
-    setxy (random-float road_width - road_width / 2) Cy_cor
+    setxy (random-float road_width - road_width / 2) Cy_cor + random-float 8
+    set vy random-float 0.05
+    set vx random-float 0.05
   ]
   if line = 3 [
-    setxy Dx_cor (random-float road_width - road_width / 2)
+    setxy Dx_cor + random-float 8 (random-float road_width - road_width / 2)
+    set vy random-float 0.05
+    set vx random-float 0.05
   ]
   set dest (line + 2) mod 4
-  set vx 0
-  set vy 0
-  set newx 0
-  set newy 0
+  set newx xcor
+  set newy ycor
   color-turtle
 end
 
@@ -124,7 +143,7 @@ to-report calc-Fattr
   let dist-x (item 0 dest_cors - xcor)
   let dist-y (item 1 dest_cors - ycor)
 
-  let dist sqrt(dist-x ^ 2 + dist-y ^ 2) + 0.0001
+  let dist sqrt(dist-x * dist-x + dist-y * dist-y) + 0.0001
   let Fx (attr_coeff / dist * dist-x)
   let Fy (attr_coeff / dist * dist-y)
 
@@ -132,16 +151,26 @@ to-report calc-Fattr
 end
 
 to-report calc-Fobst
+  let Fobst list 0 0
+  if (pillar) [
+    let dist_to_pillar (sqrt (xcor * xcor + ycor * ycor) - pillar_radius)
+    let Fx (obst_coeff / (0.01 + dist_to_pillar) ^ 2 * xcor)
+    let Fy (obst_coeff / (0.01 + dist_to_pillar) ^ 2 * ycor)
+    set Fobst (list Fx Fy)
+  ]
   let xmin road_width / -2
   let xmax road_width / 2
   let ymin road_width / -2
   let ymax road_width / 2
-  if (xcor < xmax) and (xcor > xmin) and (ycor < ymax) and (ycor > ymin) [ report list 0 0 ]
-  if ycor > 0 and ycor < ymax [ report list 0 (- obst_coeff / (0.1 + (road_width / 2) - ycor))]
-  if ycor < 0 and ycor > ymin [ report list 0 (obst_coeff / (0.1 + ycor + (road_width / 2)))]
-  if xcor > 0 and xcor < xmax [ report list (- obst_coeff / (0.1 + (road_width / 2) - xcor)) 0 ]
-  if xcor < 0 and xcor > xmin [ report list (obst_coeff / (0.1 + xcor + (road_width / 2))) 0 ]
-  report list 0 0
+
+  (ifelse
+    ((xcor < xmax) and (xcor > xmin) and (ycor < ymax) and (ycor > ymin)) [ report Fobst ]
+    ycor > 0 and ycor < ymax [ report (map + Fobst list 0 (obst_coeff / (0.01 + ycor - ymax))) ]
+    ycor < 0 and ycor > ymin [ report (map + Fobst list 0 (obst_coeff / (0.01 + ycor - ymin))) ]
+    xcor > 0 and xcor < xmax [ report (map + Fobst list (obst_coeff / (0.01 + xcor - xmax)) 0) ]
+    xcor < 0 and xcor > xmin [ report (map + Fobst list (obst_coeff / (0.01 + xcor - xmin)) 0) ]
+  )
+  report Fobst
 end
 
 to-report calc-Fbump
@@ -152,13 +181,11 @@ to-report calc-Fbump
     [
       let mx xcor
       let my ycor
-      let ax sum [1 / (((mx - xcor) / (distancexy mx my) + 0.01))] of nearby-turtles
-      let ay sum [1 / (((my - ycor) / (distancexy mx my) + 0.01))] of nearby-turtles
-      set Fx Fx - bump_coeff * ax
-      set Fy Fy - bump_coeff * ay
+      let ax sum [(mx - xcor) / (distancexy mx my * distancexy mx my) ] of nearby-turtles
+      let ay sum [(my - ycor) / (distancexy mx my * distancexy mx my) ] of nearby-turtles
+      set Fx Fx + bump_coeff * ax
+      set Fy Fy + bump_coeff * ay
     ]
-
-
   report list Fx Fy
 end
 
@@ -191,11 +218,11 @@ end
 GRAPHICS-WINDOW
 195
 10
-659
-475
+1114
+930
 -1
 -1
-5.63
+11.25
 1
 10
 1
@@ -222,7 +249,7 @@ SWITCH
 148
 pillar
 pillar
-1
+0
 1
 -1000
 
@@ -269,7 +296,7 @@ total-turtles
 total-turtles
 1
 1000
-26.0
+401.0
 25
 1
 NIL
@@ -284,7 +311,7 @@ road_width
 road_width
 4
 (max-pxcor - min-pxcor)
-8.0
+20.0
 2
 1
 NIL
@@ -299,7 +326,7 @@ pillar_radius
 pillar_radius
 0
 road_width
-0.0
+11.0
 1
 1
 NIL
@@ -312,10 +339,10 @@ SLIDER
 348
 attr_coeff
 attr_coeff
-0
-0.001
-0.0
-0.0001
+1
+5
+4.75
+0.01
 1
 NIL
 HORIZONTAL
@@ -328,9 +355,9 @@ SLIDER
 obst_coeff
 obst_coeff
 0
-0.001
-0.0
-0.0001
+2
+0.13
+0.01
 1
 NIL
 HORIZONTAL
@@ -343,9 +370,9 @@ SLIDER
 bump_coeff
 bump_coeff
 0
-0.0000001
-1.0E-7
-0.00000001
+2
+1.61
+0.01
 1
 NIL
 HORIZONTAL
@@ -692,7 +719,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.3.0
+NetLogo 6.4.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
