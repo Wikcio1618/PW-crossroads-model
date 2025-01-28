@@ -1,5 +1,4 @@
 globals [
-  margin
   Ay_cor
   Bx_cor
   Cy_cor
@@ -10,11 +9,10 @@ turtles-own [dest vx vy newx newy]
 ;; Setup procedure
 to setup
   clear-all
-  set margin 0
-  set Ay_cor max-pycor - margin * (max-pycor - min-pycor)
-  set Bx_cor max-pxcor - margin * (max-pxcor - min-pxcor)
-  set Cy_cor min-pycor + margin * (max-pycor - min-pycor)
-  set Dx_cor min-pxcor + margin * (max-pxcor - min-pxcor)
+  set Ay_cor max-pycor
+  set Bx_cor max-pxcor
+  set Cy_cor min-pycor
+  set Dx_cor min-pxcor
   setup-patches
   setup-turtles
   reset-ticks
@@ -35,32 +33,37 @@ to go
      set vy vy / v_val * 0.2
     ]
 
-
     set newx xcor + vx
     set newy ycor + vy
 
-    if (abs newx >= abs newy) and (newy >= (road_width / 2) or newy <= (road_width / -2)) [set vy (- vy) ]
-      if (abs newy > abs newx) and (newx >= (road_width / 2) or newx <= (road_width / -2)) [set vx (- vx) ]
+    ifelse (
+      (dest = 0 and newy > Ay_cor)
+      or (dest = 1 and newx > Bx_cor)
+      or (dest = 2 and newy < Cy_cor)
+      or (dest = 3 and newx < Dx_cor)
+      ) [
+      spawn-at-random
+    ] [
+      if (abs newx >= abs newy) and (newy >= (road_width / 2) or newy <= (road_width / -2)) [set vy (- 0.7 * vy) ]
+      if (abs newy > abs newx) and (newx >= (road_width / 2) or newx <= (road_width / -2)) [set vx (- 0.7 * vx) ]
+      if (newx > max-pxcor or newx < min-pxcor) [set vx (- 0.7 * vx)]
+      if (newy > max-pycor or newy < min-pycor) [set vy (- 0.7 * vy)]
       if pillar and (newx * newx + newy * newy <= pillar_radius * pillar_radius) [
         ifelse abs xcor > abs ycor [
-          set vx (- vx)
+          set vx (- 0.7 * vx)
         ] [
-          set vy (- vy)
+          set vy (- 0.7 * vy)
         ]
       ]
 
-    set newx xcor + vx
-    set newy ycor + vy
+      set newx xcor + vx
+      set newy ycor + vy
+    ]
   ]
 
   ask turtles [
-    ifelse (newx > max-pxcor or newx < min-pxcor or newy < min-pycor or newy > max-pycor)
-    [
-      spawn-at-random
-    ] [
-      facexy newx newy
-      setxy (xcor + vx) (ycor + vy)
-    ]
+    facexy newx newy
+    setxy (xcor + vx) (ycor + vy)
   ]
   tick
 end
@@ -218,11 +221,11 @@ end
 GRAPHICS-WINDOW
 195
 10
-1114
-930
+789
+605
 -1
 -1
-11.25
+7.235
 1
 10
 1
@@ -296,7 +299,7 @@ total-turtles
 total-turtles
 1
 1000
-401.0
+901.0
 25
 1
 NIL
@@ -311,7 +314,7 @@ road_width
 road_width
 4
 (max-pxcor - min-pxcor)
-20.0
+40.0
 2
 1
 NIL
@@ -326,7 +329,7 @@ pillar_radius
 pillar_radius
 0
 road_width
-11.0
+6.0
 1
 1
 NIL
@@ -339,9 +342,9 @@ SLIDER
 348
 attr_coeff
 attr_coeff
-1
+0
 5
-4.75
+1.4
 0.01
 1
 NIL
@@ -355,8 +358,8 @@ SLIDER
 obst_coeff
 obst_coeff
 0
-2
-0.13
+10
+0.96
 0.01
 1
 NIL
@@ -370,8 +373,8 @@ SLIDER
 bump_coeff
 bump_coeff
 0
-2
-1.61
+10
+0.51
 0.01
 1
 NIL
